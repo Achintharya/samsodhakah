@@ -15,10 +15,12 @@ from fastapi.responses import JSONResponse
 
 from backend.config.settings import settings
 from backend.utils.logging import setup_logging
+from backend.retrieval.scholarly import initialize_scholarly_retrieval
 
 # API routers
 from backend.api.health import router as health_router
 from backend.api.documents import router as documents_router
+from backend.api.retrieval import router as retrieval_router
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +34,10 @@ async def lifespan(app: FastAPI):
         f"(debug={settings.debug})"
     )
     settings.ensure_directories()
+    
+    # Initialize scholarly retrieval system
+    initialize_scholarly_retrieval()
+    
     yield
     # Shutdown
     logger.info(f"{settings.app_name} shutting down")
@@ -60,6 +66,7 @@ def create_app() -> FastAPI:
     # ── Routers ────────────────────────────────────────────────
     app.include_router(health_router)
     app.include_router(documents_router)
+    app.include_router(retrieval_router)
 
     # ── Root endpoint ──────────────────────────────────────────
     @app.get("/")
@@ -71,6 +78,7 @@ def create_app() -> FastAPI:
             "endpoints": {
                 "health": "/health",
                 "documents": "/api/documents",
+                "retrieval": "/api/retrieval",
             },
         }
 
