@@ -12,14 +12,9 @@ from backend.retrieval.bm25 import bm25 as bm25_retriever
 
 logger = logging.getLogger(__name__)
 
-# Attempt to import sentence-transformers for vector retrieval
-try:
-    from sentence_transformers import SentenceTransformer
-
-    HAS_SENTENCE_TRANSFORMERS = True
-except ImportError:
-    HAS_SENTENCE_TRANSFORMERS = False
-    logger.warning("sentence-transformers not available. Vector retrieval disabled.")
+# sentence-transformers loaded lazily in _get_embedder() to avoid
+# numpy/tensorflow version conflicts at import time.
+HAS_SENTENCE_TRANSFORMERS = False
 
 
 class HybridRetriever:
@@ -39,12 +34,13 @@ class HybridRetriever:
 
     def _get_embedder(self):
         """Lazy-load sentence transformer."""
-        if self._embedder is None and HAS_SENTENCE_TRANSFORMERS:
+        if self._embedder is None:
             try:
+                from sentence_transformers import SentenceTransformer
                 self._embedder = SentenceTransformer(settings.embedding_model)
                 logger.info(f"Loaded embedding model: {settings.embedding_model}")
             except Exception as e:
-                logger.warning(f"Failed to load embedding model: {e}")
+                logger.debug(f"Vector embeddings unavailable: {e}")
         return self._embedder
 
     def index_documents(self, documents: list[dict]) -> None:
