@@ -23,6 +23,7 @@ from backend.api.documents import router as documents_router
 from backend.api.retrieval import router as retrieval_router
 from backend.api.drafting import router as drafting_router
 from backend.api.verification import router as verification_router
+from backend.api.export import router as export_router
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,7 @@ def create_app() -> FastAPI:
     app.include_router(retrieval_router)
     app.include_router(drafting_router)
     app.include_router(verification_router)
+    app.include_router(export_router)
 
     # ── Root endpoint ──────────────────────────────────────────
     @app.get("/")
@@ -85,6 +87,7 @@ def create_app() -> FastAPI:
                 "retrieval": "/api/retrieval",
                 "drafting": "/api/drafting",
                 "verification": "/api/verification",
+                "export": "/api/export",
             },
         }
 
