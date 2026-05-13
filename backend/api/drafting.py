@@ -4,9 +4,10 @@ API endpoints for research drafting functionality.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from typing import Optional, List, Dict, Any
 import logging
+from pydantic import BaseModel
 
 from backend.drafting.drafting_workflow import drafting_workflow
 
@@ -47,14 +48,15 @@ async def generate_section_outline(
         raise HTTPException(status_code=500, detail=f"Outline generation failed: {str(e)}")
 
 
+class SectionRequest(BaseModel):
+    document_id: str
+    section_type: str
+    topic: str
+    related_work_id: Optional[str] = None
+    max_tokens: Optional[int] = None
+
 @router.post("/section")
-async def generate_grounded_section(
-    document_id: str,
-    section_type: str,
-    topic: str,
-    related_work_id: Optional[str] = None,
-    max_tokens: Optional[int] = None,
-) -> Dict[str, Any]:
+async def generate_grounded_section(request: SectionRequest) -> Dict[str, Any]:
     """
     Generate a grounded research section with evidence and citation support.
     
@@ -70,11 +72,11 @@ async def generate_grounded_section(
     """
     try:
         section = await drafting_workflow.generate_grounded_section(
-            document_id=document_id,
-            section_type=section_type,
-            topic=topic,
-            related_work_id=related_work_id,
-            max_tokens=max_tokens,
+            document_id=request.document_id,
+            section_type=request.section_type,
+            topic=request.topic,
+            related_work_id=request.related_work_id,
+            max_tokens=request.max_tokens,
         )
         return section
     except Exception as e:

@@ -87,9 +87,11 @@ class IngestionPipeline:
         logger.info(f"Starting ingestion for {filename} (id={doc_id})")
 
         # Step 1: Parse
+        logger.info(f"Attempting to parse {filename} with content length: {len(content)}")
         parse_result = parser_registry.parse(filename, content)
         if parse_result is None:
-            error_msg = f"No parser available for {filename}"
+            error_msg = f"No parser found for {filename}"
+            logger.error(f"Parser error: {error_msg}")
             self._create_ingestion_log(filename, "failed", 0, len(content), "", error_msg)
             return {
                 "document_id": doc_id,
@@ -97,6 +99,8 @@ class IngestionPipeline:
                 "status": "failed",
                 "error": error_msg,
             }
+        else:
+            logger.info(f"Successfully parsed {filename} with {len(parse_result.sections)} sections")
 
         # Step 2: Store raw document
         storage_meta = local_storage.upload_document(doc_id, filename, content)

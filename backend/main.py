@@ -31,16 +31,26 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan — startup and shutdown events."""
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(settings.log_dir / "samsodhakah.log"),
+            logging.StreamHandler()
+        ]
+    )
+
     # Startup
     logger.info(
         f"Starting {settings.app_name} v{settings.app_version} "
         f"(debug={settings.debug})"
     )
     settings.ensure_directories()
-    
+
     # Initialize scholarly retrieval system
     initialize_scholarly_retrieval()
-    
+
     yield
     # Shutdown
     logger.info(f"{settings.app_name} shutting down")
@@ -70,7 +80,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(documents_router)
     app.include_router(retrieval_router)
-    app.include_router(drafting_router)
+    app.include_router(drafting_router, prefix="/api")
     app.include_router(verification_router)
     app.include_router(export_router)
 

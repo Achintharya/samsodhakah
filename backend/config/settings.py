@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     # Application settings
     app_name: str = "Saṃśodhakaḥ"
     app_version: str = "0.1.0"
-    debug: bool = Field(default=False, env="DEBUG")
+    debug: bool = Field(default=True, env="DEBUG")
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
     # Data directory

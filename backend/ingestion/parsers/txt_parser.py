@@ -20,10 +20,10 @@ class TxtParser(DocumentParser):
     def can_parse(self, filename: str, content: bytes) -> bool:
         return filename.lower().endswith(".txt")
 
-    def _extract_title_and_body(self, lines: List[str]) -> tuple[str, str]:
+    def _extract_title_and_body(self, lines: List[str], filename: str) -> tuple[str, str]:
         """
         Extract title and body from text lines with robust handling.
-        
+
         Returns:
             Tuple of (title, body)
         """
@@ -48,51 +48,59 @@ class TxtParser(DocumentParser):
         return title, body
 
     def parse(self, filename: str, content: bytes) -> ParseResult:
-        text = content.decode("utf-8", errors="replace")
-        lines = text.split("\n")
-        
-        # Extract title and body robustly
-        title, body = self._extract_title_and_body(lines)
+        try:
+            text = content.decode("utf-8", errors="replace")
+            lines = text.split("\n")
 
-        # Create section with proper robustness handling
-        if not body:
-            body = text.strip()
-            
-        sections = [
-            ParsedSection(
+            logger.info(f"Decoded content length: {len(text)}")
+
+            # Extract title and body robustly
+            title, body = self._extract_title_and_body(lines, filename)
+            logger.info(f"Extracted title: '{title}', body length: {len(body)}")
+
+            # Create section with proper robustness handling
+            if not body:
+                body = text.strip()
+                logger.warning(f"No body extracted, using raw text: {len(body)}")
+
+            sections = [
+                ParsedSection(
+                    title=title,
+                    content=body,
+                    level=1,
+                    order=0,
+                )
+            ]
+
+            result = ParseResult(
+                filename=filename,
                 title=title,
-                content=body,
-                level=1,
-                order=0,
+                sections=sections,
+                metadata={"content_type": "text/plain"},
+                raw_text=text,
             )
-        ]
 
-        result = ParseResult(
-            filename=filename,
-            title=title,
-            sections=sections,
-            metadata={},
-            raw_text=text,
-        )
+            # Log for observability
+            logger.info(f"Parsed text file '{filename}': {len(text)} characters, title='{title}'")
 
-        # Log for observability
-        logger.info(f"Parsed text file '{filename}': {len(text)} characters, title='{title}'")
-        
-        # Create log entry for observability
-        self._create_ingestion_log(filename, len(sections), len(text), title)
+            # Create log entry for observability
+            self._create_ingestion_log(filename, len(sections), len(text), title)
 
-        return result
+            return result
+        except Exception as e:
+            logger.error(f"Error parsing {filename}: {e}")
+            raise
 
     def _create_ingestion_log(self, filename: str, section_count: int, char_count: int, title: str) -> None:
         """Create log entry for ingestion observability."""
         import json
         import datetime
         from pathlib import Path
-        
+
         # Ensure log directory exists
         log_dir = Path("runtime") / "ingestion_logs"
         log_dir.mkdir(exist_ok=True)
-        
+
         # Create log entry
         log_entry = {
             "timestamp": datetime.datetime.now().isoformat(),
@@ -102,7 +110,7 @@ class TxtParser(DocumentParser):
             "title": title,
             "status": "success" if section_count > 0 else "warning_no_sections"
         }
-        
+
         # Write to log file
         log_filename = log_dir / f"ingestion_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{Path(filename).stem}.json"
         try:
