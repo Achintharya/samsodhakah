@@ -117,7 +117,7 @@ source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 # Run development server
-python -m uvicorn backend.main:app --reload --port 8000
+`python -m uvicorn backend.main:app --reload --port 8000`
 ```
 
 ### Frontend Setup

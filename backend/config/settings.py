@@ -5,11 +5,20 @@ Configuration settings for Saṃśodhakaḥ system.
 from __future__ import annotations
 from pathlib import Path
 from typing import Optional
-from pydantic import BaseSettings, Field
+from pydantic_settings import BaseSettings
+from pydantic import Field
 
 class Settings(BaseSettings):
+    # Application settings
+    app_name: str = "Saṃśodhakaḥ"
+    app_version: str = "0.1.0"
+    debug: bool = Field(default=False, env="DEBUG")
+    cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+
     # Data directory
     data_dir: Path = Field(default=Path("runtime/data"), env="DATA_DIR")
+    storage_root: Path = Field(default=Path("runtime/data"), env="STORAGE_ROOT")
+    cache_dir: Path = Field(default=Path("runtime/cache"), env="CACHE_DIR")
 
     # Ingestion settings
     max_sections: int = 50
@@ -36,9 +45,17 @@ class Settings(BaseSettings):
 
     # Logging
     log_level: str = "INFO"
+    log_dir: Path = Field(default=Path("runtime/logs"), env="LOG_DIR")
 
     class Config:
         env_file = ".env"
         env_file_encoding = 'utf-8'
+
+    def ensure_directories(self) -> None:
+        """Ensure all required directories exist."""
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.storage_root.mkdir(parents=True, exist_ok=True)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.log_dir.mkdir(parents=True, exist_ok=True)
 
 settings = Settings()

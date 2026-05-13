@@ -33,7 +33,7 @@ class PromptContextBuilder:
     CHARS_PER_TOKEN = 4
 
     def __init__(self) -> None:
-        self.max_tokens = settings.max_context_tokens
+        self.max_tokens = settings.max_draft_tokens
         self.compression_ratio = settings.compression_target_ratio
 
     def build_context(
