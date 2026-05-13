@@ -132,10 +132,30 @@ Saṃśodhakaḥ is a modular, evidence-grounded scientific research intelligenc
 
 | Submodule | Responsibility |
 |---|---|
+| `base.py` | Abstract base class for all exporters |
+| `registry.py` | Central registry for managing export formats |
 | `markdown.py` | Markdown export with citations |
 | `docx.py` | DOCX export with proper formatting |
 | `latex.py` | LaTeX export with bibliography |
 | `bibtex.py` | BibTeX generation |
+| `api/export.py` | REST API endpoints for export functionality |
+
+### 8. Frontend (`frontend/`)
+
+| Submodule | Responsibility |
+|---|---|
+| `components/` | Reusable UI components (Header, etc.) |
+| `features/research-workspace/` | Main research workspace interface |
+| `features/document-library/` | Document management UI |
+| `features/drafting-workspace/` | Draft editing interface |
+| `features/evidence-explorer/` | Evidence visualization |
+| `features/verification-dashboard/` | Claim verification UI |
+| `features/export-center/` | Export functionality |
+| `layouts/` | Page layout templates |
+| `services/` | API service layer |
+| `styles/` | Global styling and design system |
+| `App.js` | Main application entry point |
+| `index.js` | React DOM rendering |
 
 ## Entity Model
 
@@ -154,6 +174,32 @@ Document
                     ├── verification_method, verification_score
                     └── provenance_chain
 ```
+
+## API Endpoints
+
+### Drafting
+- `POST /api/drafting/outline` - Generate section outline
+- `POST /api/drafting/section` - Generate grounded research section
+- `GET /api/drafting/section-types` - Get available section types
+
+### Verification
+- `POST /api/verification/section-claims` - Verify claims in section content
+- `POST /api/verification/claim-feedback` - Get detailed claim feedback
+- `GET /api/verification/verdicts` - Get verdict information
+
+### Export
+- `POST /api/export/paper` - Export paper to specified format
+- `GET /api/export/formats` - Get available export formats
+- `GET /api/export/format-info/{format_name}` - Get format information
+
+### Documents
+- `POST /api/documents/upload` - Upload document
+- `GET /api/documents/list` - List documents
+- `GET /api/documents/{id}` - Get document details
+
+### Retrieval
+- `POST /api/retrieval/search` - Scholarly retrieval search
+- `GET /api/retrieval/modes` - Get retrieval modes
 
 ## Token Economics
 
