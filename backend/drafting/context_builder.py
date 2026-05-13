@@ -12,6 +12,7 @@ import logging
 from typing import Optional
 
 from backend.config.settings import settings
+from backend.evaluation.failure_corpus import failure_corpus
 from backend.utils.token_metrics import token_metrics
 
 logger = logging.getLogger(__name__)
@@ -60,12 +61,16 @@ class PromptContextBuilder:
 
         # Add evidence units
         for ev in evidence_units:
+            content = (ev.get("content", "") or "").strip()
+            if len(content) < 40:
+                continue
             all_items.append({
-                "content": ev.get("content", ""),
+                "content": content[:900],
                 "confidence": ev.get("confidence", 0.0),
                 "role": ev.get("role", "neutral"),
                 "type": "evidence",
-                "source": ev.get("source_id", ""),
+                "source": ev.get("source_document_id") or ev.get("source_id", ""),
+                "evidence_id": ev.get("id"),
             })
 
         # Add semantic units
@@ -73,12 +78,16 @@ class PromptContextBuilder:
             unit_type = su.get("unit_type", "unknown")
             # Only include high-value types
             if unit_type in ("claim", "methodology", "experimental_result", "metric"):
+                content = (su.get("content", "") or "").strip()
+                if len(content) < 40:
+                    continue
                 all_items.append({
-                    "content": su.get("content", ""),
+                    "content": content[:700],
                     "confidence": su.get("confidence", 1.0) * 0.8,  # slightly discount semantic extraction
                     "role": "semantic",
                     "type": unit_type,
                     "source": su.get("document_id", ""),
+                    "semantic_unit_id": su.get("id"),
                 })
 
         # Phase 2: Deduplicate by content similarity
@@ -86,6 +95,7 @@ class PromptContextBuilder:
 
         # Phase 3: Sort by confidence descending
         deduplicated.sort(key=lambda x: x["confidence"], reverse=True)
+        deduplicated = self._balance_sources(deduplicated)
 
         # Phase 4: Calculate token budget
         topic_chars = len(topic)
@@ -126,7 +136,9 @@ class PromptContextBuilder:
                 break
 
             prefix = self._get_item_prefix(item)
-            context_parts.append(f"{prefix}{item['content']}")
+            source = item.get("source") or "unknown-source"
+            identifier = item.get("evidence_id") or item.get("semantic_unit_id") or "untracked"
+            context_parts.append(f"{prefix}[source={source}; id={identifier}] {item['content']}")
             total_chars += item_chars
 
         compressed_context = "\n\n".join(context_parts)
@@ -168,6 +180,23 @@ class PromptContextBuilder:
             f"({compression_stats['compression_ratio']:.1%} compression)"
         )
 
+        if all_items and compression_stats["included_items"] <= 1:
+            failure_corpus.record(
+                "over_compressed_context",
+                "PromptContextBuilder included one or fewer evidence items despite available context.",
+                {"topic": topic, "compression_stats": compression_stats},
+                severity="medium",
+                source="context_builder",
+            )
+        if compression_stats["total_tokens"] > self.max_tokens:
+            failure_corpus.record(
+                "token_overflow",
+                "PromptContextBuilder context exceeded configured draft token budget.",
+                {"topic": topic, "compression_stats": compression_stats},
+                severity="high",
+                source="context_builder",
+            )
+
         return {
             "context": compressed_context,
             "token_count": compression_stats["total_tokens"],
@@ -200,6 +229,20 @@ class PromptContextBuilder:
             unique.append(item)
 
         return unique
+
+    def _balance_sources(self, items: list[dict]) -> list[dict]:
+        """Avoid overloading the context with many near-neighbor items from one source."""
+        balanced = []
+        source_counts: dict[str, int] = {}
+        deferred = []
+        for item in items:
+            source = item.get("source") or "unknown"
+            if source_counts.get(source, 0) < 4:
+                balanced.append(item)
+                source_counts[source] = source_counts.get(source, 0) + 1
+            else:
+                deferred.append(item)
+        return balanced + deferred
 
     def _get_item_prefix(self, item: dict) -> str:
         """Get a short prefix label for an evidence item."""

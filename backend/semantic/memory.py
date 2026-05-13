@@ -198,6 +198,19 @@ class SemanticMemory:
                     "document_id": unit.get("document_id"),
                 },
             })
+        for evidence in self.evidence_units.values():
+            texts.append({
+                "id": evidence.get("id", ""),
+                "text": evidence.get("content", ""),
+                "metadata": {
+                    "type": "evidence_unit",
+                    "document_id": evidence.get("source_document_id"),
+                    "section_id": evidence.get("source_section_id"),
+                    "semantic_unit_id": evidence.get("source_semantic_unit_id"),
+                    "role": evidence.get("role", "neutral"),
+                    "confidence": evidence.get("confidence", 0.0),
+                },
+            })
         return texts
 
     # ── Persistence ─────────────────────────────────────────────

@@ -7,12 +7,14 @@ function MainLayout() {
   return (
     <div className="app-container">
       <Header />
-      <main className="main-content">
-        <Outlet />
-      </main>
-      <footer className="footer">
-        <p>© 2025 Saṃśodhakaḥ. Built with ❤️ by Achintharya.</p>
-      </footer>
+      <div className="workspace-shell">
+        <main className="main-content">
+          <Outlet />
+        </main>
+        <footer className="footer">
+          <p>© 2025 Saṃśodhakaḥ. Built with ❤️ by Achintharya.</p>
+        </footer>
+      </div>
     </div>
   );
 }

@@ -16,13 +16,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/drafting", tags=["drafting"])
 
 
+class OutlineRequest(BaseModel):
+    document_id: str
+    section_type: str
+    topic: str
+    related_work_id: Optional[str] = None
+
+
 @router.post("/outline")
-async def generate_section_outline(
-    document_id: str,
-    section_type: str,
-    topic: str,
-    related_work_id: Optional[str] = None,
-) -> Dict[str, Any]:
+async def generate_section_outline(request: OutlineRequest) -> Dict[str, Any]:
     """
     Generate a structured outline for a research paper section.
     
@@ -37,10 +39,10 @@ async def generate_section_outline(
     """
     try:
         outline = await drafting_workflow.generate_section_outline(
-            document_id=document_id,
-            section_type=section_type,
-            topic=topic,
-            related_work_id=related_work_id,
+            document_id=request.document_id,
+            section_type=request.section_type,
+            topic=request.topic,
+            related_work_id=request.related_work_id,
         )
         return outline
     except Exception as e:

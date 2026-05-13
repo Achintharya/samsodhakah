@@ -7,6 +7,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from typing import Optional, List, Dict, Any
 import logging
+from pydantic import BaseModel
 
 from backend.verification.ux import verification_ui
 
@@ -15,13 +16,20 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/verification", tags=["verification"])
 
 
+class SectionClaimsRequest(BaseModel):
+    document_id: str
+    section_content: str
+    section_type: str
+    related_work_id: Optional[str] = None
+
+
+class ClaimFeedbackRequest(BaseModel):
+    claim: str
+    verification_result: Dict[str, Any]
+
+
 @router.post("/section-claims")
-async def verify_section_claims(
-    document_id: str,
-    section_content: str,
-    section_type: str,
-    related_work_id: Optional[str] = None,
-) -> Dict[str, Any]:
+async def verify_section_claims(request: SectionClaimsRequest) -> Dict[str, Any]:
     """
     Verify claims in section content against source documents.
     
@@ -36,10 +44,10 @@ async def verify_section_claims(
     """
     try:
         result = await verification_ui.verify_section_claims(
-            document_id=document_id,
-            section_content=section_content,
-            section_type=section_type,
-            related_work_id=related_work_id,
+            document_id=request.document_id,
+            section_content=request.section_content,
+            section_type=request.section_type,
+            related_work_id=request.related_work_id,
         )
         return result
     except Exception as e:
@@ -48,10 +56,7 @@ async def verify_section_claims(
 
 
 @router.post("/claim-feedback")
-async def get_claim_feedback(
-    claim: str,
-    verification_result: Dict[str, Any],
-) -> Dict[str, Any]:
+async def get_claim_feedback(request: ClaimFeedbackRequest) -> Dict[str, Any]:
     """
     Get detailed feedback for a single claim.
     
@@ -63,7 +68,7 @@ async def get_claim_feedback(
         Detailed feedback for UI display
     """
     try:
-        feedback = verification_ui.get_claim_feedback(claim, verification_result)
+        feedback = verification_ui.get_claim_feedback(request.claim, request.verification_result)
         return feedback
     except Exception as e:
         logger.error(f"Claim feedback generation failed: {e}")

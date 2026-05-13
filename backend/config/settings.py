@@ -57,5 +57,6 @@ class Settings(BaseSettings):
         self.storage_root.mkdir(parents=True, exist_ok=True)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.log_dir.mkdir(parents=True, exist_ok=True)
+        (self.data_dir / "evaluation").mkdir(parents=True, exist_ok=True)
 
 settings = Settings()

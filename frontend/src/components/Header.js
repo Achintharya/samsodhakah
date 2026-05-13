@@ -1,25 +1,29 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import './Header.css';
 
 function Header() {
   return (
-    <header className="header">
+    <aside className="header" aria-label="Primary workspace navigation">
       <div className="header-container">
-        <Link to="/" className="logo">
+        <NavLink to="/" className="logo">
           <img src="/logo.png" alt="Saṃśodhakaḥ" className="logo-image" />
-          <span className="logo-text">Saṃśodhakaḥ</span>
-        </Link>
+          <span>
+            <span className="logo-text">Saṃśodhakaḥ</span>
+            <span className="logo-subtitle">semantic writing IDE</span>
+          </span>
+        </NavLink>
         <nav className="nav">
-          <Link to="/" className="nav-link">Research</Link>
-          <Link to="/library" className="nav-link">Library</Link>
-          <Link to="/evidence" className="nav-link">Evidence</Link>
-          <Link to="/draft" className="nav-link">Drafting</Link>
-          <Link to="/citations" className="nav-link">Citations</Link>
-          <Link to="/export" className="nav-link">Export</Link>
+          <NavLink to="/" end className="nav-link">Research</NavLink>
+          <NavLink to="/library" className="nav-link">Library</NavLink>
+          <NavLink to="/evidence" className="nav-link">Evidence</NavLink>
+          <NavLink to="/draft" className="nav-link">Drafting</NavLink>
+          <NavLink to="/verify" className="nav-link">Verification</NavLink>
+          <NavLink to="/citations" className="nav-link">Citations</NavLink>
+          <NavLink to="/export" className="nav-link">Export</NavLink>
         </nav>
       </div>
-    </header>
+    </aside>
   );
 }
 

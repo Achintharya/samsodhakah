@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import MainLayout from './layouts/MainLayout';
-import ResearchWorkspace from './features/research-workspace/Workspace';
+import ResearchWorkspace from './features/research-workspace/ResearchWorkspace';
 import DocumentLibrary from './features/document-library/Library';
 import EvidenceExplorer from './features/evidence-explorer/Explorer';
 import VerificationDashboard from './features/verification-dashboard/Dashboard';
@@ -18,6 +18,7 @@ function App() {
           <Route path="library" element={<DocumentLibrary />} />
           <Route path="evidence" element={<EvidenceExplorer />} />
           <Route path="verify" element={<VerificationDashboard />} />
+          <Route path="verification" element={<VerificationDashboard />} />
           <Route path="draft" element={<DraftingWorkspace />} />
           <Route path="citations" element={<CitationManager />} />
           <Route path="export" element={<ExportCenter />} />

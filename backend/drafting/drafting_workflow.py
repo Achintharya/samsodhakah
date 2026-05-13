@@ -21,6 +21,7 @@ from backend.drafting.prompt_builders import (
 from backend.retrieval.scholarly import scholarly_retriever, RetrievalMode
 from backend.semantic.memory import semantic_memory
 from backend.verification.engine import verification_engine
+from backend.evaluation.failure_corpus import failure_corpus
 from backend.utils.token_metrics import token_metrics
 
 logger = logging.getLogger(__name__)
@@ -115,10 +116,30 @@ class DraftingWorkflow:
             )
         if not retrieval_results:
             warnings.append("No retrieval results found; using available document-local memory only.")
+            failure_corpus.record(
+                "poor_retrieval",
+                "Grounded drafting had no retrieval results and fell back to document-local memory.",
+                {"document_id": document_id, "section_type": section_type, "topic": topic},
+                severity="high",
+                source="drafting",
+            )
 
         evidence_units = self._collect_evidence_units(document_id, retrieval_results)
         semantic_units = self._collect_semantic_units(document_id, retrieval_results)
         citations = self._build_citations(evidence_units)
+        if evidence_units and not citations:
+            failure_corpus.record(
+                "citation_mismatch",
+                "Evidence was available but no citations could be constructed.",
+                {
+                    "document_id": document_id,
+                    "section_type": section_type,
+                    "topic": topic,
+                    "evidence_ids": [ev.get("id") for ev in evidence_units[:10]],
+                },
+                severity="medium",
+                source="drafting",
+            )
 
         context_result = context_builder.build_context(
             topic=topic,
@@ -178,6 +199,16 @@ class DraftingWorkflow:
         generated_content = self._render_structured_to_prose(structured_output)
         verification_results = await self._verify_generated_claims(generated_content, evidence_units, semantic_units)
         provenance = self._build_provenance(retrieval_results, evidence_units, semantic_units, retrieval_mode.value)
+        self._record_generation_quality_signals(
+            document_id=document_id,
+            section_type=section_type,
+            topic=topic,
+            evidence_units=evidence_units,
+            citations=citations,
+            verification_results=verification_results,
+            provenance=provenance,
+            context_stats=context_stats,
+        )
 
         token_metrics.log(
             operation="grounded_section_generation",
@@ -254,10 +285,43 @@ class DraftingWorkflow:
                 "source_section_id": result_id if metadata.get("type") == "section" else metadata.get("section_id", ""),
                 "source_semantic_unit_id": result_id if metadata.get("type") not in ["document", "section"] else "",
                 "retrieval_score": result.get("score", 0.0),
+                "retrieval_rank": len(evidence_by_id) + 1,
                 "retrieval_metadata": metadata,
             }
 
-        return sorted(evidence_by_id.values(), key=lambda ev: ev.get("confidence", 0.0), reverse=True)[:12]
+        return self._select_evidence_for_drafting(list(evidence_by_id.values()))
+
+    def _select_evidence_for_drafting(self, evidence_units: List[Dict[str, Any]], limit: int = 12) -> List[Dict[str, Any]]:
+        """Select strong, diverse evidence without letting duplicate sources dominate."""
+        sorted_units = sorted(evidence_units, key=lambda ev: ev.get("confidence", 0.0), reverse=True)
+        selected: List[Dict[str, Any]] = []
+        source_counts: Dict[str, int] = {}
+        seen_content = set()
+
+        for ev in sorted_units:
+            content = (ev.get("content", "") or "").strip()
+            if len(content) < 40:
+                continue
+            fingerprint = content.lower()[:180]
+            if fingerprint in seen_content:
+                continue
+            source_id = ev.get("source_document_id") or "unknown"
+            if source_counts.get(source_id, 0) >= 4 and len(selected) < limit:
+                continue
+            selected.append(ev)
+            seen_content.add(fingerprint)
+            source_counts[source_id] = source_counts.get(source_id, 0) + 1
+            if len(selected) >= limit:
+                break
+
+        if len(selected) < min(limit, len(sorted_units)):
+            for ev in sorted_units:
+                if ev not in selected and len((ev.get("content", "") or "").strip()) >= 40:
+                    selected.append(ev)
+                if len(selected) >= limit:
+                    break
+
+        return selected[:limit]
 
     def _collect_semantic_units(self, document_id: str, retrieval_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         unit_by_id = {u.get("id", ""): u for u in semantic_memory.get_document_semantic_units(document_id)}
@@ -382,6 +446,60 @@ class DraftingWorkflow:
             "semantic_unit_ids": [u.get("id") for u in semantic_units if u.get("id")],
             "retrieval_result_ids": [r.get("id") for r in retrieval_results],
         }
+
+    def _record_generation_quality_signals(
+        self,
+        document_id: str,
+        section_type: str,
+        topic: str,
+        evidence_units: List[Dict[str, Any]],
+        citations: List[Dict[str, Any]],
+        verification_results: List[Dict[str, Any]],
+        provenance: Dict[str, Any],
+        context_stats: Dict[str, Any],
+    ) -> None:
+        """Log practical quality failures for later workflow tuning."""
+        base_payload = {
+            "document_id": document_id,
+            "section_type": section_type,
+            "topic": topic,
+            "evidence_count": len(evidence_units),
+            "citation_count": len(citations),
+            "context_stats": context_stats,
+        }
+
+        unsupported = [
+            result for result in verification_results
+            if result.get("evidence_count", 0) == 0 or result.get("confidence", 0.0) < 0.35
+        ]
+        contradicted = [
+            result for result in verification_results
+            if result.get("contradicted_count", 0) > 0 or result.get("verdict") == "contradicted"
+        ]
+        if unsupported:
+            failure_corpus.record(
+                "unsupported_claim",
+                "Generated section contains low-confidence or unsupported claims.",
+                {**base_payload, "claims": [r.get("claim") for r in unsupported[:5]]},
+                severity="medium",
+                source="drafting_verification",
+            )
+        if contradicted:
+            failure_corpus.record(
+                "contradictory_output",
+                "Generated section contains claims contradicted by retrieved sources.",
+                {**base_payload, "claims": [r.get("claim") for r in contradicted[:5]]},
+                severity="high",
+                source="drafting_verification",
+            )
+        if len(provenance.get("evidence_chain", [])) < max(1, min(3, len(evidence_units))):
+            failure_corpus.record(
+                "weak_provenance",
+                "Generated section has sparse provenance relative to available evidence.",
+                {**base_payload, "provenance": provenance},
+                severity="medium",
+                source="drafting",
+            )
 
     def _render_structured_to_prose(self, structured_result: Dict[str, Any]) -> str:
         """

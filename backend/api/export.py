@@ -11,6 +11,7 @@ import logging
 import re
 
 from backend.export.registry import export_registry
+from backend.evaluation.failure_corpus import failure_corpus
 
 logger = logging.getLogger(__name__)
 
@@ -171,6 +172,24 @@ async def export_paper(request: ExportRequest) -> Response:
             output_path=request.output_path,
             include_bibliography=request.include_bibliography,
         )
+
+        if not content:
+            failure_corpus.record(
+                "malformed_export",
+                "Exporter returned empty content.",
+                {"format": normalized_format, "title": paper_data.get("title")},
+                severity="high",
+                source="export",
+            )
+        if normalized_format in {"markdown", "latex", "bibtex", "docx"} and request.include_bibliography:
+            if paper_data.get("sections") and not paper_data.get("citations"):
+                failure_corpus.record(
+                    "citation_mismatch",
+                    "Export requested bibliography but no citations were present.",
+                    {"format": normalized_format, "title": paper_data.get("title")},
+                    severity="medium",
+                    source="export",
+                )
 
         filename = _filename_for_export(paper_data, extension)
         headers = {

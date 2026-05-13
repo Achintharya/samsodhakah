@@ -5,12 +5,13 @@ Scholarly retrieval — specialized retrieval modes for research paper writing.
 from __future__ import annotations
 
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Set
 from enum import Enum
 
 from backend.config.settings import settings
 from backend.retrieval.hybrid import hybrid_retriever
 from backend.semantic.memory import semantic_memory
+from backend.evaluation.failure_corpus import failure_corpus
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +88,7 @@ class ScholarlyRetriever:
         
         # Apply mode-specific post-processing
         processed_results = self._post_process_results(results, mode, top_k)
+        self._record_retrieval_quality_signals(query, mode, processed_results, document_id)
         
         logger.info(
             f"Scholarly search '{query[:50]}...' in mode '{mode.value}': "
@@ -184,11 +186,14 @@ class ScholarlyRetriever:
             
         # Filter results based on relevance to the mode
         filtered_results = []
+        mode_terms = self._mode_terms(mode)
         
         for result in results:
             # Basic filtering by metadata if available
             metadata = result.get("metadata", {})
             result_type = metadata.get("type", "")
+            text = result.get("text", "") or ""
+            lowered_text = text.lower()
             
             # Mode-specific relevance scoring
             relevance_score = 1.0
@@ -217,17 +222,117 @@ class ScholarlyRetriever:
                     relevance_score *= 0.8
                 else:
                     relevance_score *= 0.6
+            elif mode in [RetrievalMode.RESULTS, RetrievalMode.EXPERIMENTAL_SETUP, RetrievalMode.DISCUSSION]:
+                if result_type in ["evidence_unit", "experimental_result", "metric", "methodology", "section"]:
+                    relevance_score *= 1.15
+                elif result_type == "document":
+                    relevance_score *= 0.75
+
+            matched_terms = sum(1 for term in mode_terms if term in lowered_text)
+            if matched_terms:
+                relevance_score *= min(1.35, 1.0 + matched_terms * 0.07)
+
+            if metadata.get("role") == "contradicts" or any(
+                term in lowered_text for term in ["contradict", "conflict", "limitation", "however", "in contrast"]
+            ):
+                result["contradiction_signal"] = True
+                if mode in [RetrievalMode.CONTRADICTION_SCAN, RetrievalMode.DISCUSSION]:
+                    relevance_score *= 1.2
+
+            if metadata.get("type") == "evidence_unit":
+                relevance_score *= 1.1
                     
             # Apply relevance score and filter by threshold
             result["relevance_score"] = relevance_score
             if relevance_score >= 0.5:  # Minimum relevance threshold
                 filtered_results.append(result)
         
-        # Sort by combined score and return top-k
+        # Sort by combined score, then preserve source diversity for drafting usefulness.
         filtered_results.sort(key=lambda x: x.get("score", 0) * x.get("relevance_score", 1), reverse=True)
-        
-        # Return top results
-        return filtered_results[:top_k]
+
+        return self._select_diverse_results(filtered_results, top_k)
+
+    def _mode_terms(self, mode: RetrievalMode) -> List[str]:
+        """Compact term list used for post-retrieval reranking."""
+        terms = {
+            RetrievalMode.RELATED_WORK: ["related", "prior", "previous", "survey", "literature", "baseline"],
+            RetrievalMode.METHODOLOGY: ["method", "approach", "procedure", "workflow", "implementation", "protocol"],
+            RetrievalMode.THEORY: ["theory", "model", "principle", "assumption", "framework", "formulation"],
+            RetrievalMode.CONTRADICTION_SCAN: ["contradict", "conflict", "limitation", "discrepancy", "however", "challenge"],
+            RetrievalMode.RESULTS: ["result", "finding", "metric", "performance", "evaluation", "benchmark"],
+            RetrievalMode.EXPERIMENTAL_SETUP: ["setup", "dataset", "configuration", "tool", "environment", "protocol"],
+            RetrievalMode.DISCUSSION: ["discussion", "implication", "limitation", "interpretation", "future", "significance"],
+        }
+        return terms.get(mode, [])
+
+    def _select_diverse_results(self, results: List[Dict[str, Any]], top_k: int) -> List[Dict[str, Any]]:
+        """Prefer relevant results while avoiding one-source evidence collapse."""
+        selected: List[Dict[str, Any]] = []
+        source_counts: Dict[str, int] = {}
+        seen_texts: Set[str] = set()
+
+        for result in results:
+            metadata = result.get("metadata", {}) or {}
+            source_id = metadata.get("document_id") or result.get("id", "unknown")
+            fingerprint = (result.get("text", "") or "").strip().lower()[:180]
+            if fingerprint and fingerprint in seen_texts:
+                continue
+            if source_counts.get(source_id, 0) >= 3 and len(selected) < top_k:
+                continue
+
+            result["diversity_rank"] = source_counts.get(source_id, 0) + 1
+            selected.append(result)
+            source_counts[source_id] = source_counts.get(source_id, 0) + 1
+            if fingerprint:
+                seen_texts.add(fingerprint)
+            if len(selected) >= top_k:
+                break
+
+        if len(selected) < top_k:
+            for result in results:
+                if result not in selected:
+                    selected.append(result)
+                if len(selected) >= top_k:
+                    break
+
+        return selected[:top_k]
+
+    def _record_retrieval_quality_signals(
+        self,
+        query: str,
+        mode: RetrievalMode,
+        results: List[Dict[str, Any]],
+        document_id: Optional[str],
+    ) -> None:
+        """Log lightweight failure-corpus entries for poor retrieval signals."""
+        if not results:
+            failure_corpus.record(
+                "poor_retrieval",
+                "Scholarly retrieval returned no results.",
+                {"query": query, "mode": mode.value, "document_id": document_id},
+                severity="high",
+                source="retrieval",
+            )
+            return
+
+        top_score = max(float(r.get("score", 0.0) or 0.0) for r in results)
+        source_count = len({(r.get("metadata", {}) or {}).get("document_id") or r.get("id") for r in results})
+        if top_score < 0.15 or (len(results) >= 4 and source_count <= 1):
+            failure_corpus.record(
+                "poor_retrieval",
+                "Retrieval produced low-scoring or low-diversity evidence.",
+                {
+                    "query": query,
+                    "mode": mode.value,
+                    "document_id": document_id,
+                    "top_score": top_score,
+                    "result_count": len(results),
+                    "source_count": source_count,
+                    "result_ids": [r.get("id") for r in results[:8]],
+                },
+                severity="medium",
+                source="retrieval",
+            )
 
 
 # Global instance

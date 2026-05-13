@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './ResearchWorkspace.css';
 
 function ResearchWorkspace() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('read');
   const [documentId, setDocumentId] = useState('');
   const [sectionType, setSectionType] = useState('related_work');
   const [topic, setTopic] = useState('');
@@ -159,7 +158,7 @@ function ResearchWorkspace() {
       setSuccess(`Verification complete! ${verification.summary?.supported_claims || 0} claims supported, ${verification.summary?.issues_found || 0} issues found.`);
       // Store verification results
       localStorage.setItem('verificationResults', JSON.stringify(verification));
-      navigate('/verification', { state: { verification } });
+      navigate('/verify', { state: { verification } });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -330,7 +329,7 @@ function ResearchWorkspace() {
         <div className="feature-card">
           <h3>📊 Verification Dashboard</h3>
           <p>Check claim support and evidence quality</p>
-          <button onClick={() => navigate('/verification')}>Go to Verification</button>
+          <button onClick={() => navigate('/verify')}>Go to Verification</button>
         </div>
 
         <div className="feature-card">

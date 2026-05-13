@@ -5,7 +5,8 @@ DOCX export — exports research papers in Microsoft Word format.
 from __future__ import annotations
 
 import logging
-from typing import Optional, List, Dict, Any
+from io import BytesIO
+from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 
 from backend.export.base import Exporter
@@ -28,7 +29,7 @@ class DOCXExporter(Exporter):
         output_path: Optional[str] = None,
         include_bibliography: bool = True,
         **kwargs
-    ) -> str:
+    ) -> Union[str, bytes]:
         """
         Export research paper data to a DOCX-compatible format (simulated).
         
@@ -41,13 +42,65 @@ class DOCXExporter(Exporter):
         Returns:
             DOCX content representation as string (simulated)
         """
-        # Since we can't easily create DOCX files without external libraries,
-        # we'll create a structured representation that would be converted to DOCX
-        
-        # Note: In a real implementation, this would use python-docx or similar
-        # to create actual DOCX files with proper styling, tables, etc.
-        
-        # We'll create a textual representation that includes all structural info
+        try:
+            return self._export_real_docx(paper_data, output_path, include_bibliography)
+        except Exception as exc:
+            logger.warning("Falling back to textual DOCX representation: %s", exc)
+            return self._export_textual_representation(paper_data, output_path, include_bibliography)
+
+    def _export_real_docx(
+        self,
+        paper_data: Dict[str, Any],
+        output_path: Optional[str],
+        include_bibliography: bool,
+    ) -> bytes:
+        """Create a real DOCX document using python-docx when available."""
+        from docx import Document
+
+        document = Document()
+        title = paper_data.get("title", "Untitled Research Paper")
+        authors = paper_data.get("authors", [])
+        abstract = paper_data.get("abstract", "")
+
+        document.add_heading(title, level=0)
+        if authors:
+            document.add_paragraph(", ".join(authors), style=None)
+        if abstract:
+            document.add_heading("Abstract", level=1)
+            document.add_paragraph(abstract)
+
+        for section in paper_data.get("sections", []) or []:
+            document.add_heading(section.get("title", "Untitled Section"), level=1)
+            for paragraph in str(section.get("content", "")).split("\n\n"):
+                if paragraph.strip():
+                    document.add_paragraph(paragraph.strip())
+
+        citations = paper_data.get("citations", []) or []
+        if include_bibliography and citations:
+            document.add_heading("References", level=1)
+            for index, citation in enumerate(citations, 1):
+                document.add_paragraph(f"{index}. {self._format_citation_for_docx(citation)}")
+
+        document.add_paragraph(f"Exported on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+        buffer = BytesIO()
+        document.save(buffer)
+        content = buffer.getvalue()
+
+        if output_path:
+            with open(output_path, "wb") as handle:
+                handle.write(content)
+            logger.info("Saved DOCX export to %s", output_path)
+
+        return content
+
+    def _export_textual_representation(
+        self,
+        paper_data: Dict[str, Any],
+        output_path: Optional[str],
+        include_bibliography: bool,
+    ) -> str:
+        """Fallback structured text representation for environments without DOCX support."""
         content_parts = []
         
         # Title and metadata
