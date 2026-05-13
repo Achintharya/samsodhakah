@@ -47,37 +47,17 @@ class VerificationUX:
         # Extract claims from section content (simplified approach)
         claims = self._extract_claims_from_content(section_content)
         
-        # Get source documents for verification
-        source_docs = []
-        
-        # Add main document
-        main_doc = semantic_memory.get_document(document_id)
-        if main_doc:
-            source_docs.append(main_doc)
-        
-        # Add related work if specified
-        if related_work_id:
-            related_doc = semantic_memory.get_document(related_work_id)
-            if related_doc:
-                source_docs.append(related_doc)
-        
-        # Prepare source texts for verification
-        source_texts = {}
-        for doc in source_docs:
-            doc_id = doc.get("document_id")
-            # In a real implementation, we would get actual document text
-            # For now, we simulate with document metadata
-            source_texts[doc_id] = f"Document: {doc.get('title', 'Unknown')} - {doc.get('filename', '')}"
+        source_texts, source_catalog = self._build_source_texts(document_id, related_work_id)
         
         # Verify each claim
         verification_results = []
         for claim in claims[:10]:  # Limit to first 10 claims for performance
             if claim.strip():
                 try:
-                    # In a real implementation, this would call verification_engine.verify_claim
-                    # For now, we simulate it with a basic result
-                    result = self._simulate_verification_result(claim, source_texts)
-                    verification_results.append(result)
+                    engine_result = await verification_engine.verify_claim(claim, source_texts)
+                    verification_results.append(
+                        self._to_ui_verification_result(engine_result, source_catalog)
+                    )
                 except Exception as e:
                     logger.warning(f"Error verifying claim '{claim[:50]}...': {e}")
                     # Add placeholder result for failed verification
@@ -101,6 +81,8 @@ class VerificationUX:
             "claim_count": len(claims),
             "verification_results": verification_results,
             "summary": summary,
+            "source_count": len(source_texts),
+            "evidence_usage": self._summarize_evidence_usage(verification_results),
             "generated_at": datetime.now().isoformat(),
         }
         
@@ -134,67 +116,132 @@ class VerificationUX:
                 ]):
                     claims.append(sentence + ".")
                     
+        if not claims:
+            claims = [s + "." for s in sentences if len(s) > 50][:10]
         return claims[:15]  # Limit to 15 claims for performance
 
-    def _simulate_verification_result(
-        self, 
-        claim: str, 
-        source_texts: Dict[str, str]
+    def _build_source_texts(
+        self,
+        document_id: str,
+        related_work_id: Optional[str] = None,
+    ) -> tuple[Dict[str, str], Dict[str, Dict[str, Any]]]:
+        """Collect real section, semantic-unit, and evidence text for verification."""
+        source_texts: Dict[str, str] = {}
+        source_catalog: Dict[str, Dict[str, Any]] = {}
+        document_ids = [document_id] + ([related_work_id] if related_work_id else [])
+
+        for doc_id in [doc for doc in document_ids if doc]:
+            doc = semantic_memory.get_document(doc_id) or {}
+            title = doc.get("title") or doc.get("filename") or doc_id
+
+            for section in semantic_memory.get_document_sections(doc_id):
+                content = section.get("content", "")
+                if content.strip():
+                    source_id = section.get("id") or f"section_{len(source_texts)}"
+                    source_texts[source_id] = content
+                    source_catalog[source_id] = {
+                        "type": "section",
+                        "source_document_id": doc_id,
+                        "source_document": title,
+                        "title": section.get("title", "Section"),
+                        "content": content,
+                    }
+
+            for unit in semantic_memory.get_document_semantic_units(doc_id):
+                content = unit.get("content", "")
+                if content.strip():
+                    source_id = unit.get("id") or f"semantic_{len(source_texts)}"
+                    source_texts[source_id] = content
+                    source_catalog[source_id] = {
+                        "type": unit.get("unit_type", "semantic_unit"),
+                        "source_document_id": doc_id,
+                        "source_document": title,
+                        "title": unit.get("unit_type", "Semantic unit"),
+                        "content": content,
+                    }
+
+            for evidence in semantic_memory.get_evidence_for_document(doc_id):
+                content = evidence.get("content", "")
+                if content.strip():
+                    source_id = evidence.get("id") or f"evidence_{len(source_texts)}"
+                    source_texts[source_id] = content
+                    source_catalog[source_id] = {
+                        "type": "evidence",
+                        "source_document_id": doc_id,
+                        "source_document": title,
+                        "title": evidence.get("role", "Evidence"),
+                        "content": content,
+                        "confidence": evidence.get("confidence", 0.0),
+                    }
+
+        return dict(list(source_texts.items())[:30]), source_catalog
+
+    def _to_ui_verification_result(
+        self,
+        engine_result: Dict[str, Any],
+        source_catalog: Dict[str, Dict[str, Any]],
     ) -> Dict[str, Any]:
-        """
-        Simulate verification results for demonstration purposes.
-        """
-        # In a real system, this would call the actual verification engine
-        # For now, we simulate based on claim content
-        
-        # Simple heuristics for demonstration
-        if "shows" in claim.lower() or "demonstrates" in claim.lower():
-            verdict = "supported"
-            confidence = 0.85
-        elif "however" in claim.lower() or "but" in claim.lower():
-            verdict = "partially_supported" if len(source_texts) > 1 else "supported"
-            confidence = 0.7
-        elif any(word in claim.lower() for word in ["not", "no", "negative", "opposite"]):
-            verdict = "contradicted" if len(source_texts) > 1 else "supported"
-            confidence = 0.6
-        else:
-            verdict = "supported"
-            confidence = 0.9
-            
-        # Mock evidence and contradictions
-        supporting_evidence = [
-            {
-                "id": f"evidence_{i}",
-                "source_document": list(source_texts.keys())[0] if source_texts else "unknown",
-                "content_preview": "Supporting evidence...",
-                "confidence": confidence,
-                "role": "supports",
-            } for i in range(min(2, len(source_texts)))
-        ]
-        
-        contradictions = []
-        if verdict == "contradicted":
-            contradictions.append({
-                "type": "lexical",
-                "source_a": list(source_texts.keys())[0] if source_texts else "unknown",
-                "source_b": "different_source",
-                "detail": "Contradictory evidence found",
-                "severity": 0.8,
+        """Adapt VerificationEngine output to the existing frontend-friendly shape."""
+        source_results = engine_result.get("source_results", [])
+        ranked_sources = sorted(
+            source_results,
+            key=lambda r: r.get("combined_confidence", 0.0),
+            reverse=True,
+        )
+        supporting_evidence = []
+        for result in ranked_sources[:5]:
+            source_id = result.get("source_id", "")
+            source = source_catalog.get(source_id, {})
+            content = source.get("content", "")
+            confidence = result.get("combined_confidence", 0.0)
+            if confidence <= 0 and not content:
+                continue
+            supporting_evidence.append({
+                "id": source_id,
+                "source_document": source.get("source_document", source_id),
+                "source_document_id": source.get("source_document_id", ""),
+                "source_type": source.get("type", "source"),
+                "content_preview": content[:240] + ("..." if len(content) > 240 else ""),
+                "confidence": round(confidence, 4),
+                "role": "supports" if confidence >= 0.5 else "weak_support",
+                "lexical": result.get("lexical", {}),
+                "numerical": result.get("numerical", {}),
             })
-        
+
         warnings = []
-        if confidence < 0.7:
-            warnings.append("Low confidence in claim verification")
-            
+        if engine_result.get("confidence", 0.0) < 0.5:
+            warnings.append("Low evidence overlap; review or add stronger source material.")
+        if not supporting_evidence:
+            warnings.append("No direct supporting evidence snippets were found.")
+
         return {
-            "claim": claim,
-            "verdict": verdict,
-            "confidence": round(confidence, 4),
-            "evidence_count": len(supporting_evidence),
-            "details": f"Claim analyzed with {len(supporting_evidence)} supporting pieces",
+            "claim": engine_result.get("claim", ""),
+            "verdict": engine_result.get("verdict", "unverifiable"),
+            "confidence": engine_result.get("confidence", 0.0),
+            "evidence_count": engine_result.get("evidence_count", len(supporting_evidence)),
+            "supported_count": engine_result.get("supported_count", 0),
+            "contradicted_count": engine_result.get("contradicted_count", 0),
+            "details": (
+                f"Verified against {engine_result.get('evidence_count', 0)} real source text(s); "
+                f"{engine_result.get('supported_count', 0)} showed strong support."
+            ),
             "supporting_evidence": supporting_evidence,
-            "contradictions": contradictions,
+            "contradictions": engine_result.get("contradictions", []),
             "warnings": warnings,
+            "source_results": source_results,
+        }
+
+    def _summarize_evidence_usage(self, verification_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        evidence_ids = {
+            evidence.get("id")
+            for result in verification_results
+            for evidence in result.get("supporting_evidence", [])
+            if evidence.get("id")
+        }
+        return {
+            "unique_evidence_used": len(evidence_ids),
+            "claims_with_evidence": sum(1 for r in verification_results if r.get("supporting_evidence")),
+            "low_confidence_claims": sum(1 for r in verification_results if r.get("confidence", 0.0) < 0.5),
         }
 
     def _build_verification_summary(

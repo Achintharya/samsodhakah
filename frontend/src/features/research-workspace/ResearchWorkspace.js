@@ -25,6 +25,26 @@ function ResearchWorkspace() {
     { value: 'conclusion', label: 'Conclusion' },
   ];
 
+  const formatExtensions = {
+    markdown: 'md',
+    md: 'md',
+    latex: 'tex',
+    tex: 'tex',
+    bibtex: 'bib',
+    bib: 'bib',
+    docx: 'docx',
+  };
+
+  const getFilenameFromDisposition = (disposition, fallbackFormat) => {
+    const fallbackExtension = formatExtensions[fallbackFormat] || fallbackFormat;
+    if (!disposition) {
+      return `research-section.${fallbackExtension}`;
+    }
+
+    const match = disposition.match(/filename="?([^";]+)"?/i);
+    return match?.[1] || `research-section.${fallbackExtension}`;
+  };
+
   const handleGenerateOutline = async () => {
     if (!documentId || !topic) {
       setError('Please provide both document ID and topic');
@@ -94,7 +114,9 @@ function ResearchWorkspace() {
       }
 
       const section = await response.json();
-      setSuccess(`Section generated successfully! Used ${section.evidence_units.length} evidence units.`);
+      const evidenceCount = section.evidence_units?.length || section.context_stats?.evidence_count || 0;
+      const citationCount = section.citations?.length || 0;
+      setSuccess(`Section generated successfully! Used ${evidenceCount} evidence units and ${citationCount} citations.`);
       // Store section in local state for display
       localStorage.setItem('currentSection', JSON.stringify(section));
       navigate('/draft', { state: { section } });
@@ -134,7 +156,7 @@ function ResearchWorkspace() {
       }
 
       const verification = await response.json();
-      setSuccess(`Verification complete! ${verification.summary.supported_claims} claims supported, ${verification.summary.issues_found} issues found.`);
+      setSuccess(`Verification complete! ${verification.summary?.supported_claims || 0} claims supported, ${verification.summary?.issues_found || 0} issues found.`);
       // Store verification results
       localStorage.setItem('verificationResults', JSON.stringify(verification));
       navigate('/verification', { state: { verification } });
@@ -186,7 +208,7 @@ function ResearchWorkspace() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `research-section.${format}`;
+      a.download = getFilenameFromDisposition(response.headers.get('content-disposition'), format);
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -318,6 +340,7 @@ function ResearchWorkspace() {
             <button onClick={() => handleExport('markdown')}>Export as Markdown</button>
             <button onClick={() => handleExport('latex')}>Export as LaTeX</button>
             <button onClick={() => handleExport('bibtex')}>Export Citations</button>
+            <button onClick={() => handleExport('docx')}>Export as DOCX</button>
           </div>
         </div>
       </div>
