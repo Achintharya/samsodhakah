@@ -1,86 +1,44 @@
 """
-Application configuration via Pydantic Settings.
-All environment variables are parsed and validated at startup.
+Configuration settings for Saṃśodhakaḥ system.
 """
 
 from __future__ import annotations
-
 from pathlib import Path
 from typing import Optional
-from pydantic_settings import BaseSettings, SettingsConfigDict
-
+from pydantic import BaseSettings, Field
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False,
-        extra="ignore",
-    )
+    # Data directory
+    data_dir: Path = Field(default=Path("runtime/data"), env="DATA_DIR")
 
-    # ── Application ──────────────────────────────────────────────
-    app_name: str = "Saṃśodhakaḥ"
-    app_version: str = "0.1.0"
-    debug: bool = False
+    # Ingestion settings
+    max_sections: int = 50
+    max_draft_tokens: int = 4096
 
-    # ── Server ──────────────────────────────────────────────────
-    host: str = "0.0.0.0"
-    port: int = 8000
-    reload: bool = True
-    log_level: str = "info"
-    cors_origins: list[str] = ["*"]
+    # Mistral API settings
+    mistral_api_url: str = Field(default="https://api.mistral.ai/v1", env="MISTRAL_API_URL")
+    mistral_api_key: str = Field(default="", env="MISTRAL_API_KEY")
+    mistral_model: str = Field(default="mistral-tiny", env="MISTRAL_MODEL")
+    mistral_max_tokens: int = Field(default=1024, env="MISTRAL_MAX_TOKENS")
+    mistral_temperature: float = Field(default=0.7, env="MISTRAL_TEMPERATURE")
+    mistral_timeout: int = Field(default=30, env="MISTRAL_TIMEOUT")
+    mistral_max_retries: int = Field(default=3, env="MISTRAL_MAX_RETRIES")
 
-    # ── Paths ───────────────────────────────────────────────────
-    base_dir: Path = Path(__file__).resolve().parent.parent.parent
-    data_dir: Path = base_dir / "runtime" / "data"
-    cache_dir: Path = base_dir / "runtime" / "cache"
-    log_dir: Path = base_dir / "runtime" / "logs"
+    # Embedding settings
+    embedding_model: str = Field(default="all-MiniLM-L6-v2", env="EMBEDDING_MODEL")
 
-    # ── Storage ────────────────────────────────────────────────
-    storage_root: Path = base_dir / "runtime" / "data" / "storage"
-
-    # ── Database (SQLite) ──────────────────────────────────────
-    database_url: str = f"sqlite:///{base_dir / 'runtime' / 'data' / 'samsodhakah.db'}"
-
-    # ── LLM Providers ──────────────────────────────────────────
-    mistral_api_key: Optional[str] = None
-    groq_api_key: Optional[str] = None
-    openai_api_key: Optional[str] = None
-
-    # Default LLM model
-    llm_model: str = "mistral-small-latest"
-    llm_provider: str = "mistral"  # mistral | groq | openai
-
-    # ── Embeddings ────────────────────────────────────────────
-    embedding_model: str = "all-MiniLM-L6-v2"  # local sentence-transformers
-    embedding_dimension: int = 384
-
-    # ── Retrieval ──────────────────────────────────────────────
+    # Retrieval settings
     bm25_k1: float = 1.5
     bm25_b: float = 0.75
-    retrieval_top_k: int = 20
-    reranking_top_k: int = 10
 
-    # ── Verification ──────────────────────────────────────────
-    lexical_similarity_threshold: float = 0.7
-    semantic_similarity_threshold: float = 0.75
-    numerical_tolerance: float = 0.05
+    # Compression settings
+    compression_target_ratio: float = 0.3
 
-    # ── Drafting / Token Economics ────────────────────────────
-    max_context_tokens: int = 4096
-    max_draft_tokens: int = 2048
-    max_sections: int = 8
-    compression_target_ratio: float = 0.3  # compress context to 30% of original
+    # Logging
+    log_level: str = "INFO"
 
-    # ── Web Search ────────────────────────────────────────────
-    serper_api_key: Optional[str] = None
-    duckduckgo_max_results: int = 5
-
-    def ensure_directories(self) -> None:
-        """Create all required runtime directories if they don't exist."""
-        for directory in [self.data_dir, self.cache_dir, self.log_dir, self.storage_root]:
-            directory.mkdir(parents=True, exist_ok=True)
-
+    class Config:
+        env_file = ".env"
+        env_file_encoding = 'utf-8'
 
 settings = Settings()
-settings.ensure_directories()

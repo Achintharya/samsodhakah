@@ -1,5 +1,5 @@
 """
-Parser registry — discovers available parsers and routes documents to the correct one.
+Parser registry — discovers available document parsers and routes documents to the correct one.
 """
 
 from __future__ import annotations
@@ -10,9 +10,10 @@ import logging
 from backend.ingestion.parsers.base import DocumentParser, ParseResult
 from backend.ingestion.parsers.markdown_parser import MarkdownParser
 from backend.ingestion.parsers.txt_parser import TxtParser
+from backend.ingestion.parsers.pdf_parser import PDFParser
+from backend.ingestion.parsers.docx_parser import DOCXParser
 
 logger = logging.getLogger(__name__)
-
 
 class ParserRegistry:
     """Registry of available document parsers with auto-discovery."""
@@ -27,7 +28,8 @@ class ParserRegistry:
         """Register all built-in parsers."""
         self.register(MarkdownParser())
         self.register(TxtParser())
-        # PDF and DOCX parsers will be added when their dependencies are available
+        self.register(PDFParser())
+        self.register(DOCXParser())
         logger.info(f"Parser registry initialized with {len(self._parsers)} parsers")
 
     def register(self, parser: DocumentParser) -> None:
@@ -49,7 +51,6 @@ class ParserRegistry:
             logger.warning(f"No parser found for file: {filename}")
             return None
         return parser.parse(filename, content)
-
 
 # Global registry instance
 parser_registry = ParserRegistry()
