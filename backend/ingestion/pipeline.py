@@ -1,6 +1,7 @@
 """
 Async ingestion pipeline — orchestrates document parsing, section extraction,
 semantic unit extraction, and indexing.
+Enhanced with improved robustness and observability.
 """
 
 from __future__ import annotations
@@ -31,6 +32,38 @@ class IngestionPipeline:
     6. Queue for semantic extraction
     """
 
+    def _create_ingestion_log(self, filename: str, status: str, section_count: int, 
+                            char_count: int, title: str, error: Optional[str] = None) -> None:
+        """Create log entry for ingestion observability."""
+        import json
+        import datetime
+        from pathlib import Path
+        
+        # Ensure log directory exists
+        log_dir = Path("runtime") / "ingestion_logs"
+        log_dir.mkdir(exist_ok=True)
+        
+        # Create log entry
+        log_entry = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "filename": filename,
+            "status": status,
+            "section_count": section_count,
+            "character_count": char_count,
+            "title": title,
+        }
+        
+        if error:
+            log_entry["error"] = error
+            
+        # Write to log file
+        log_filename = log_dir / f"ingestion_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{Path(filename).stem}.json"
+        try:
+            with open(log_filename, 'w') as f:
+                json.dump(log_entry, f, indent=2)
+        except Exception as e:
+            logger.warning(f"Failed to write ingestion log for {filename}: {e}")
+
     async def ingest(
         self,
         filename: str,
@@ -56,17 +89,20 @@ class IngestionPipeline:
         # Step 1: Parse
         parse_result = parser_registry.parse(filename, content)
         if parse_result is None:
+            error_msg = f"No parser available for {filename}"
+            self._create_ingestion_log(filename, "failed", 0, len(content), "", error_msg)
             return {
                 "document_id": doc_id,
                 "filename": filename,
                 "status": "failed",
-                "error": f"No parser available for {filename}",
+                "error": error_msg,
             }
 
         # Step 2: Store raw document
         storage_meta = local_storage.upload_document(doc_id, filename, content)
+        char_count = len(parse_result.raw_text)
 
-        # Step 3: Build result
+        # Step 3: Build result with enhanced metadata and observability
         result = {
             "document_id": doc_id,
             "filename": filename,
@@ -93,8 +129,12 @@ class IngestionPipeline:
         logger.info(
             f"Ingestion complete: {filename} → "
             f"{len(parse_result.sections)} sections, "
-            f"{len(parse_result.raw_text)} chars"
+            f"{char_count} chars"
         )
+        
+        # Create ingestion log
+        self._create_ingestion_log(filename, "success", len(parse_result.sections), 
+                                 char_count, parse_result.title)
 
         # Track token metrics for ingestion
         token_metrics.log(
@@ -102,7 +142,7 @@ class IngestionPipeline:
             subsystem="pipeline",
             input_tokens=len(content) // 4,  # rough estimate
             context_size_chars=len(content),
-            compressed_size_chars=len(parse_result.raw_text),
+            compressed_size_chars=char_count,
             metadata={"filename": filename, "sections": len(parse_result.sections)},
         )
 
