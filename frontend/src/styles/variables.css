@@ -1,0 +1,60 @@
+:root {
+  /* Color Palette - Soft Neutrals with Scholarly Accents */
+  --color-background-dark: #1a1a1a;
+  --color-background-medium: #2a2a2a;
+  --color-background-light: #3a3a3a;
+  --color-surface-card: rgba(42, 42, 42, 0.7); /* Subtle glass effect */
+  --color-border-subtle: rgba(255, 255, 255, 0.1);
+  --color-text-primary: #e0e0e0;
+  --color-text-secondary: #b0b0b0;
+  --color-text-muted: #707070;
+  --color-accent-gold: #ffd700; /* Golden scholarly accent */
+  --color-accent-olive: #808000; /* Deep olive for depth */
+  --color-accent-amber: #ffbf00; /* Warm amber for highlights */
+  --color-success: #4CAF50;
+  --color-error: #F44336;
+  --color-info: #2196F3;
+
+  /* Typography */
+  --font-family-primary: 'Inter', sans-serif;
+  --font-family-monospace: 'Fira Code', 'Consolas', monospace;
+  --font-size-base: 16px;
+  --font-size-sm: 0.875rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-h1: 2.5rem;
+  --font-size-h2: 2rem;
+  --font-size-h3: 1.75rem;
+  --font-size-h4: 1.5rem;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --line-height-base: 1.6;
+  --line-height-heading: 1.2;
+
+  /* Spacing - Semantic Scale */
+  --spacing-xxs: 4px;
+  --spacing-xs: 8px;
+  --spacing-sm: 12px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-xxl: 48px;
+  --spacing-3xl: 64px;
+
+  /* Borders & Shadows */
+  --border-radius-sm: 4px;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+  --border-radius-xl: 16px;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.1), 0 10px 10px rgba(0, 0, 0, 0.04);
+
+  /* Transitions */
+  --transition-fast: 0.15s ease-out;
+  --transition-normal: 0.3s ease-out;
+}
