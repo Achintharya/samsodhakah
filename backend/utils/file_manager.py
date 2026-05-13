@@ -1,6 +1,5 @@
 """
 Thread-safe atomic file operations with cross-platform locking.
-Preserved and refactored from Akṣarajña backend AtomicFileManager.
 """
 
 from __future__ import annotations

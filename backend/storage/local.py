@@ -1,6 +1,5 @@
 """
 Local filesystem storage backend.
-Preserved and refactored from Akṣarajña backend LocalStorageManager.
 """
 
 from __future__ import annotations

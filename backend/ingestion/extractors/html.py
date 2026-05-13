@@ -1,6 +1,5 @@
 """
 HTML content extraction — extracts readable text from web pages.
-Preserved and refactored from Akṣarajña backend simple_extract().
 """
 
 from __future__ import annotations

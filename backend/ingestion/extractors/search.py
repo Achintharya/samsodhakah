@@ -1,6 +1,6 @@
 """
 Web search module — DuckDuckGo primary, Serper API fallback.
-Preserved and refactored from Akṣarajña backend web_context_extract.py.
+Core search functionality originally from the predecessor system.
 """
 
 from __future__ import annotations
