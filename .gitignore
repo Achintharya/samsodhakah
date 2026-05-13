@@ -116,7 +116,11 @@ docs/site/
 docker-compose.override.yml
 
 # ============================================================================
-# Old Akṣarajña repositories (to be removed after migration)
+# Semantic memory persistence
 # ============================================================================
-Akṣarajña backend/
-Akṣarajña frontend/
+runtime/data/semantic_memory/
+
+# ============================================================================
+# Vector index cache
+# ============================================================================
+runtime/cache/vectors/
